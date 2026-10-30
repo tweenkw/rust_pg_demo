@@ -1,4 +1,5 @@
 use dotenv::dotenv;
+use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio_postgres::{Client, NoTls};
 
@@ -59,7 +60,7 @@ async fn list_users(
 
 async fn insert_worker(
     mut rx: mpsc::Receiver<(String, String)>,
-    client: Client,
+    client: Arc<Client>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     while let Some((name, email)) = rx.recv().await {
         match insert_user(&client, &name, &email).await {
@@ -94,8 +95,12 @@ fn main() {
 
         let (tx, rx) = mpsc::channel::<(String, String)>(100);
 
+        let shared_client = Arc::new(client);
+
+        let worker_client = Arc::clone(&shared_client);
+
         let worker_handle = tokio::spawn(async move {
-            if let Err(e) = insert_worker(rx, client).await {
+            if let Err(e) = insert_worker(rx, worker_client).await {
                 eprintln!("Worker завершился с ошибкой: {}", e);
             }
         });
@@ -118,8 +123,7 @@ fn main() {
         if let Err(e) = worker_handle.await {
             eprintln!("Worker упал: {}", e);
         }
-
-        match list_users(&client).await {
+        match list_users(&shared_client).await {
             Ok(users) => {
                 println!("\n=== Все пользователи ===");
                 for u in users {
