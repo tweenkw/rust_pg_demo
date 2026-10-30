@@ -72,6 +72,7 @@ async fn insert_worker(
 
 fn main() {
     let rt = tokio::runtime::Runtime::new().expect("Не удалось создать Tokio runtime");
+
     rt.block_on(async {
         let client = match connect().await {
             Ok(c) => c,
@@ -80,36 +81,44 @@ fn main() {
                 return;
             }
         };
+
         if let Err(e) = create_table(&client).await {
             eprintln!("Не удалось создать таблицу: {}", e);
             return;
         }
+
         match insert_user(&client, "Alice", "alice@example.com").await {
             Ok(id) => println!("Создан пользователь Alice с id={}", id),
             Err(e) => eprintln!("Ошибка вставки Alice: {}", e),
         }
+
         let (tx, rx) = mpsc::channel::<(String, String)>(100);
+
         let worker_handle = tokio::spawn(async move {
             if let Err(e) = insert_worker(rx, client).await {
                 eprintln!("Worker завершился с ошибкой: {}", e);
             }
         });
+
         let users_to_insert = vec![
             ("Bob".to_string(), "bob@example.com".to_string()),
             ("Charlie".to_string(), "charlie@example.com".to_string()),
             ("Diana".to_string(), "diana@example.com".to_string()),
             ("Eve".to_string(), "eve@example.com".to_string()),
         ];
+
         for (name, email) in users_to_insert {
             if let Err(e) = tx.send((name, email)).await {
                 eprintln!("Не удалось отправить в канал: {}", e);
                 break;
             }
         }
+
         drop(tx);
         if let Err(e) = worker_handle.await {
             eprintln!("Worker упал: {}", e);
         }
+
         match list_users(&client).await {
             Ok(users) => {
                 println!("\n=== Все пользователи ===");
