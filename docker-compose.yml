@@ -1,14 +1,5 @@
 version: '3.8'
 services:
-  app:
-    build: .
-    environment:
-      DATABASE_URL: postgres://postgres:password@db:5432/postgres
-    depends_on:
-      db:
-        condition: service_healthy
-    networks: [app-net]
-
   db:
     image: postgres:15
     container_name: pg_container
@@ -16,6 +7,8 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
       POSTGRES_DB: postgres
+    ports:
+      - "5433:5432"
     volumes:
       - pg_data:/var/lib/postgresql/data
     healthcheck:
@@ -23,11 +16,6 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
-    networks: [app-net]
 
 volumes:
   pg_data:
-
-networks:
-  app-net:
-    driver: bridge
